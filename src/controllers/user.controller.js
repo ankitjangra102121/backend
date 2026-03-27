@@ -16,7 +16,7 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // check if user already exists - username, email
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ username }, { email }],
   });
 
@@ -25,14 +25,14 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // check for images, check for avatar
-  const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.path?.coverImage[0]?.path;
+  const avatarLocalPath = req.files?.avatar?.[0]?.path;
+  const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
 
   if (!avatarLocalPath) {
     throw new apiError(400, "Avatar file is required.");
   }
 
-  // upload them to clodinary, avatar
+  // upload them to cloudinary, avatar
   const avatar = await uploadOnCloudinary(avatarLocalPath);
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
@@ -57,13 +57,13 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // check for user creation
   if (!createdUser) {
-    throw new apiError(500, "Semthing went wrong while registering the user.");
+    throw new apiError(500, "Something went wrong while registering the user.");
   }
 
   // return response
   return res
     .status(201)
-    .json(new apiResponse(200, createdUser, "User registered successfully."));
+    .json(new apiResponse(201, createdUser, "User registered successfully."));
 });
 
 export { registerUser };

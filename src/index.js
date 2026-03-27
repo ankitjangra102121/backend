@@ -6,7 +6,7 @@ dotenv.config({
 import { app } from "./app.js"
 import connectDB from "./db/index.js"
 
-
+console.log("API KEY:", process.env.CLOUDINARY_API_KEY);
 connectDB()
 .then( () => {
     app.listen(process.env.PORT || 8000, () => {
