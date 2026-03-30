@@ -3,10 +3,15 @@ import { apiError } from "../utils/apiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
+
+    if (!user) {
+      throw new apiError(404, "User not found");
+    }
     const accessToken = await user.generateAccessToken();
     const refreshToken = await user.generateRefreshToken();
 
@@ -14,13 +19,14 @@ const generateAccessAndRefreshTokens = async (userId) => {
     await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
-    throw new apiError(500, "Error generating tokens.");
+    console.log("TOKEN ERROR:", error);
+    throw new apiError(500, error.message);
   }
 };
 
 const registerUser = asyncHandler(async (req, res) => {
   // get user details from frontend
-  const { fullName, email, username, password } = req.body;
+  const { fullName, email, username, password } = req.body || {};
 
   // validation - not empty
   if (
@@ -48,7 +54,9 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // upload them to cloudinary, avatar
   const avatar = await uploadOnCloudinary(avatarLocalPath);
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  const coverImage = coverImageLocalPath
+    ? await uploadOnCloudinary(coverImageLocalPath)
+    : null;
 
   if (!avatar) {
     throw new apiError(400, "Avatar file is missing.");
@@ -82,10 +90,10 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   // get data from frontend
-  const { username, email, password } = req.body;
+  const { username, email, password } = req.body || {};
 
   // validation of username or email
-  if (!username || !email) {
+  if (!username && !email) {
     throw new apiError(400, "Username or email is required for login.");
   }
   // check if user exists
@@ -119,13 +127,14 @@ const loginUser = asyncHandler(async (req, res) => {
   // send cookies
   const cookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
   };
 
   // return response
   return res
     .status(200)
-    .cookie("accessToken", "refreshToken", "cookieOptions")
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new apiResponse(
         200,
@@ -153,7 +162,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   );
   const cookieOptions = {
     httpOnly: true,
-    secure: true,
+    secure: process.env.NODE_ENV === "production",
   };
 
   return res
@@ -163,4 +172,41 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new apiResponse(200, {}, "User logged out successfully."));
 });
 
-export { registerUser, loginUser, logoutUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new apiError(401, "unauthorized request");
+  }
+
+  const decodedToken = jwt.verify(
+    incomingRefreshToken,
+    process.env.REFRESH_TOKEN_SECRET
+  );
+
+  const user = await User.findById(decodedToken?._id);
+
+  if (!user || user?.refreshToken !== incomingRefreshToken) {
+    throw new apiError(401, "unauthorized request");
+  }
+
+  const accessToken = user.generateAccessToken(user._id);
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .json(
+      new apiResponse(
+        200,
+        { accessToken },
+        "Access token refreshed successfully."
+      )
+    );
+});
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken };
