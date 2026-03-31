@@ -271,6 +271,7 @@ const updateCurrentUser = asyncHandler(async (req, res) => {
   if (!user) {
     throw new apiError(404, "User not found.");
   }
+
   // return response
   return res
     .status(200)
@@ -357,7 +358,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     throw new apiError(404, "User not found.");
   }
 
-  // 6. return response with updated cover image url
+  // 7. return response with updated cover image url
   return res
     .status(200)
     .json(
@@ -367,6 +368,85 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         "User cover image updated successfully."
       )
     );
+});
+
+// get user profile controller
+const getUserProfile = asyncHandler(async (req, res) => {
+  // get username from request params
+  const { username } = req.params;
+
+  // validate username
+  if(!username?.trim()){
+    throw new apiError(400, "Username is required.");
+  }
+// find user by username and get profile details along with subscribers count, subscribed channels count and isSubscribed (if current logged in user is subscribed to that channel or not)
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedChannels"
+      }
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers"
+        },
+        subscribedChannelsCount: {
+          $size: "$subscribedChannels"
+        },
+        isSubscribed: {
+          $cond: {
+            if: {
+              $in:[
+                req.user?._id,
+                "$subscribers.subscriber"
+              ]
+            },
+            then: true,
+            else: false
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        fullName: 1,
+        username: 1,
+        email: 1,
+        avatar: 1,
+        coverImage: 1,
+        subscribersCount: 1,
+        subscribedChannelsCount: 1,
+        isSubscribed: 1,
+      }
+    }
+  ])
+
+  // if user not found then throw error
+  if(!channel?.length){
+    throw new apiError(404, "User not found.");
+  }
+
+  // return response with user profile details
+  return res
+    .status(200)
+    .json(new apiResponse(200, channel[0], "User profile fetched successfully."));
 });
 
 export {
@@ -379,4 +459,6 @@ export {
   updateCurrentUser,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserProfile,
+
 };
