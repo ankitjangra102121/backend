@@ -4,7 +4,6 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken";
-import e from "express";
 
 //function to generate access token and refresh token
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -517,4 +516,5 @@ export {
   updateUserCoverImage,
   getUserProfile,
   getWatchHistory,
+  generateAccessAndRefreshTokens,
 };
